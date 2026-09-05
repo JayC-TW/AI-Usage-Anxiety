@@ -1,0 +1,19 @@
+# Local build products, caches, and working notes
+/bin/
+/outputs/
+/work/
+/tmp/
+.DS_Store
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local design and test planning documents
+/docs/sdd.md
+/docs/tdd.md
