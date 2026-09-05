@@ -145,9 +145,3 @@ docs/assets/        README 圖片
 ## 授權
 
 本專案採用 [MIT License](LICENSE) 授權。
-
-## 發布前檢查
-
-`.gitignore` 排除 `work/`、`tmp/`、`bin/`、`outputs/`、`.DS_Store` 及常見憑證檔。請保留這些排除規則；直接壓縮整個資料夾不會套用 Git 忽略規則。已追蹤的檔案也不會因新增忽略規則而自動移除。
-
-建置腳本以 `-trimpath` 移除 Go 產物的本機來源路徑。發行時請使用最新重建並檢查過的 App／ZIP，不要附帶舊產物、快取或工作紀錄。
