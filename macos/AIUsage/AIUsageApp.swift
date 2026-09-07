@@ -16,6 +16,7 @@ struct AIUsageApp: App {
     var body: some Scene {
         MenuBarExtra {
             UsagePopover(store: store)
+                .onAppear { store.refreshIfDue() }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in store.shutdown() }
         } label: {
             Image(nsImage: usageIcon)

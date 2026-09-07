@@ -39,6 +39,32 @@ private struct TimerKeys: KeychainAccess {
                 exit(1)
             }
         }
+        // Regression: the tick period and the due threshold were identical, so a few
+        // milliseconds of dispatch jitter left a tick just short of due and skipped it.
+        var liveCount = 0
+        var liveReady = false
+        let interval = 0.2
+        let live = UsageStore(keychain: TimerKeys(), automatic: false) { _, _, _ in
+            liveCount += 1
+            return Snapshot(schemaVersion: 1, updatedAt: Date(), statuses: [], settings: [:])
+        }
+        Task { @MainActor in
+            await live.start(timerInterval: interval)
+            liveReady = true
+        }
+        let liveStart = Date()
+        let liveDeadline = liveStart.addingTimeInterval(interval * 12)
+        while Date() < liveDeadline {
+            RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
+        live.shutdown()
+        // One tick of headroom: the timer's tolerance may defer the last one past the deadline.
+        let expected = Int(Date().timeIntervalSince(liveStart) / interval) - 1
+        guard liveReady, liveCount >= expected else {
+            fputs("FAIL: \(liveCount) collections on a real clock, expected at least \(expected)\n", stderr)
+            exit(1)
+        }
+
         store.shutdown()
         let finalCount = count
         now = now.addingTimeInterval(180)

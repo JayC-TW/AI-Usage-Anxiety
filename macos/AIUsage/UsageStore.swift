@@ -22,6 +22,9 @@ final class UsageStore: ObservableObject {
     private var pending = false
     private var stopped = false
     private var timer: Timer?
+    private var refreshInterval: TimeInterval = 180
+    private var refreshTolerance: TimeInterval = 18
+    private var activity: NSObjectProtocol?
     private var lastStarted: Date?
     private var wakeObserver: NSObjectProtocol?
     private var initialized = false
@@ -46,6 +49,10 @@ final class UsageStore: ObservableObject {
 
     func start(scheduleTimer: Bool = true, timerInterval: TimeInterval = 180) async {
             guard !initialized, !keyBusy else { return }
+            refreshInterval = timerInterval
+            // Let the kernel coalesce the wake-up with other work instead of waking the
+            // CPU on its own every period. The timer never fires before its due date.
+            refreshTolerance = timerInterval * 0.1
             keyBusy = true
             let storage = keychain
             do {
@@ -59,15 +66,26 @@ final class UsageStore: ObservableObject {
             guard !stopped else { return }
             refresh()
             if !scheduleTimer { return }
+            // A menu bar app lives in the background, where App Nap suspends run loop
+            // timers after the first few minutes. Hold an activity so the timer keeps firing.
+            activity = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiatedAllowingIdleSystemSleep, reason: "periodic AI usage refresh")
             let refreshTimer = Timer(timeInterval: timerInterval, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.refreshIfDue() }
             }
+            refreshTimer.tolerance = refreshTolerance
             RunLoop.main.add(refreshTimer, forMode: .common)
             timer = refreshTimer
     }
 
     func refreshIfDue() {
-        if lastStarted == nil || clock().timeIntervalSince(lastStarted!) >= 180 { refresh() }
+        guard let lastStarted else { refresh(); return }
+        // The timer ticks on the same period as this check and may run up to its tolerance
+        // late, so two ticks can sit less than one period apart. Without that much slack —
+        // plus a margin for dispatch jitter — such a tick reads as "not due" and the whole
+        // cycle is skipped.
+        let slack = refreshTolerance + min(5, refreshInterval * 0.05)
+        if clock().timeIntervalSince(lastStarted) >= refreshInterval - slack { refresh() }
     }
 
     func refresh() {
@@ -172,7 +190,9 @@ final class UsageStore: ObservableObject {
     }
 
     func shutdown() {
-        stopped = true; timer?.invalidate(); job?.stopForAppExit()
+        stopped = true; timer?.invalidate(); timer = nil; job?.stopForAppExit()
+        if let activity { ProcessInfo.processInfo.endActivity(activity) }
+        activity = nil
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
     }
 }

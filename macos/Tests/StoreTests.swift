@@ -67,7 +67,9 @@ final class TestKeys: KeychainAccess, @unchecked Sendable {
         precondition(fetch.requests.count == 1, "must not overlap")
         fetch.finish(); try await settle { fetch.requests.count == 2 }
         fetch.finish(); try await settle { !store.loading }
-        now = now.addingTimeInterval(179); store.refreshIfDue()
+        // 157s is the due threshold: the 180s period minus the timer's 18s tolerance and
+        // a 5s jitter margin, so a late tick still counts as due instead of skipping a cycle.
+        now = now.addingTimeInterval(156); store.refreshIfDue()
         precondition(fetch.requests.count == 2)
         now = now.addingTimeInterval(1); store.refreshIfDue()
         try await settle { fetch.requests.count == 3 }
